@@ -18,7 +18,37 @@ class BigQueryLoader(BaseLoader, variant='bigquery'):
         self.project = connection.database
         self.dataset = connection.schema
         self.credentials_file = connection.credentials_file
-        self.temp_gcs_bucket = connection.extra.get('temp_gcs_bucket', '')
+        self.temp_gcs_bucket = (
+            connection.extra.get('temp_gcs_bucket', '') if connection.extra else ''
+        )
+        self._billing_project_id = (
+            connection.extra.get('billing_project') if connection.extra else None
+        )
+
+    def _billing_project(self) -> str:
+        """Resolve the billing/quota project for BigQuery API calls.
+
+        Priority: connection.extra.billing_project > credentials JSON project_id > self.project
+        """
+        if self._billing_project_id:
+            return self._billing_project_id
+
+        if self.credentials_file:
+            import json
+            from pathlib import Path
+
+            creds_path = Path(self.credentials_file)
+            if creds_path.exists():
+                try:
+                    with open(creds_path) as f:
+                        creds = json.load(f)
+                    project_id = creds.get('project_id')
+                    if project_id:
+                        return project_id
+                except Exception:
+                    pass
+
+        return self.project
 
     def load(self, table: TableConfig, data: ExtractResult, spark) -> None:
         target_name = table.target_name
@@ -51,6 +81,7 @@ class BigQueryLoader(BaseLoader, variant='bigquery'):
             df.write.format('bigquery')
             .option('table', f'{self.project}.{self.dataset}.{target_name}')
             .option('temporaryGcsBucket', self.temp_gcs_bucket)
+            .option('parentProject', self._billing_project())
             .mode(write_mode)
         )
 
