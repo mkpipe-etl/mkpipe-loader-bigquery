@@ -1,14 +1,13 @@
 import gc
 from datetime import datetime
 
+from mkpipe.models import ConnectionConfig, ExtractResult, TableConfig
+from mkpipe.spark.base import BaseLoader
+from mkpipe.utils import get_logger
 from pyspark.sql import functions as F
 from pyspark.sql.types import TimestampType
 
-from mkpipe.spark.base import BaseLoader
-from mkpipe.models import ConnectionConfig, ExtractResult, TableConfig
-from mkpipe.utils import get_logger
-
-JAR_PACKAGES = ['com.google.cloud.spark:spark-4.0-bigquery:0.42.0']
+JAR_PACKAGES = ['com.google.cloud.spark:spark-4.1-bigquery:0.44.1-preview']
 
 logger = get_logger(__name__)
 
@@ -27,7 +26,9 @@ class BigQueryLoader(BaseLoader, variant='bigquery'):
         df = data.df
 
         if df is None:
-            logger.info({'table': target_name, 'status': 'skipped', 'reason': 'no data'})
+            logger.info(
+                {'table': target_name, 'status': 'skipped', 'reason': 'no data'}
+            )
             return
 
         etl_time = datetime.now()
@@ -38,11 +39,13 @@ class BigQueryLoader(BaseLoader, variant='bigquery'):
         if table.write_partitions:
             df = df.coalesce(table.write_partitions)
 
-        logger.info({
-            'table': target_name,
-            'status': 'loading',
-            'write_mode': write_mode,
-        })
+        logger.info(
+            {
+                'table': target_name,
+                'status': 'loading',
+                'write_mode': write_mode,
+            }
+        )
 
         writer = (
             df.write.format('bigquery')
