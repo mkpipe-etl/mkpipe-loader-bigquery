@@ -7,7 +7,7 @@ from mkpipe.utils import get_logger
 from pyspark.sql import functions as F
 from pyspark.sql.types import TimestampType
 
-JAR_PACKAGES = ['com.google.cloud.spark:spark-4.1-bigquery:0.44.1-preview']
+JAR_PACKAGES = ['com.google.cloud.spark:spark-bigquery-with-dependencies_2.13:0.44.1']
 
 logger = get_logger(__name__)
 
