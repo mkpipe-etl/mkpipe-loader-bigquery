@@ -122,10 +122,11 @@ class BigQueryLoader(BaseLoader, variant='bigquery'):
             )
             return
 
+        col_name = self.ingested_at_column
         etl_time = datetime.now()
-        if 'etl_time' in df.columns:
-            df = df.drop('etl_time')
-        df = df.withColumn('etl_time', F.lit(etl_time).cast(TimestampType()))
+        if col_name in df.columns:
+            df = df.drop(col_name)
+        df = df.withColumn(col_name, F.lit(etl_time).cast(TimestampType()))
 
         if table.write_partitions:
             df = df.coalesce(table.write_partitions)
