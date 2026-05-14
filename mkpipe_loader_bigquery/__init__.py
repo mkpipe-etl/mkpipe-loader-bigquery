@@ -88,6 +88,24 @@ class BigQueryLoader(BaseLoader, variant='bigquery'):
             f'WHEN NOT MATCHED THEN INSERT ({insert_cols}) VALUES ({insert_vals})'
         )
 
+    def _execute_sql(self, sql: str, spark) -> None:
+        spark.conf.set('viewsEnabled', 'true')
+        opts = spark.read.format('bigquery') \
+            .option('parentProject', self._billing_project()) \
+            .option('query', sql)
+        if self.credentials_file:
+            opts = opts.option('credentialsFile', self.credentials_file)
+        opts.load()
+
+    def _table_exists(self, target_name: str, spark) -> bool:
+        """Check if a table exists in BigQuery."""
+        try:
+            full_table = self._full_table(target_name)
+            self._execute_sql(f'SELECT 1 FROM `{full_table}` LIMIT 0', spark)
+            return True
+        except Exception:
+            return False
+
     def _upsert(self, df, target_name: str, write_key: List[str], spark) -> None:
         temp_name = f'_mkpipe_tmp_{target_name}'
         temp_full = self._full_table(temp_name)
@@ -99,17 +117,10 @@ class BigQueryLoader(BaseLoader, variant='bigquery'):
                 temp_full, target_full, write_key, df.columns, non_key_cols,
             )
             logger.debug({'upsert_sql': sql})
-            spark.conf.set('viewsEnabled', 'true')
-            spark.read.format('bigquery') \
-                .option('parentProject', self._billing_project()) \
-                .option('query', sql) \
-                .load()
+            self._execute_sql(sql, spark)
         finally:
             try:
-                spark.read.format('bigquery') \
-                    .option('parentProject', self._billing_project()) \
-                    .option('query', f'DROP TABLE IF EXISTS `{temp_full}`') \
-                    .load()
+                self._execute_sql(f'DROP TABLE IF EXISTS `{temp_full}`', spark)
             except Exception:
                 logger.warning("Failed to drop temp table '%s'", temp_full)
 
@@ -148,8 +159,13 @@ class BigQueryLoader(BaseLoader, variant='bigquery'):
                 case WriteStrategy.APPEND:
                     self._write_df(df, 'append', target_name)
                 case WriteStrategy.REPLACE:
-                    mode = 'append' if self.if_exists == 'append' else 'overwrite'
-                    self._write_df(df, mode, target_name)
+                    if self.if_exists == 'append':
+                        if self._table_exists(target_name, spark):
+                            full_table = self._full_table(target_name)
+                            self._execute_sql(f'DELETE FROM `{full_table}` WHERE TRUE', spark)
+                        self._write_df(df, 'append', target_name)
+                    else:
+                        self._write_df(df, 'overwrite', target_name)
                 case WriteStrategy.UPSERT | WriteStrategy.MERGE:
                     if not table.write_key:
                         raise ConfigError(

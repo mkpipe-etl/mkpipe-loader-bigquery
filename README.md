@@ -58,7 +58,7 @@ Control how data is written to BigQuery:
 | Strategy | BigQuery Behavior |
 |---|---|
 | `append` | Insert via Spark BigQuery connector (default for incremental) |
-| `replace` | Overwrite table via Spark BigQuery connector (default for full). Use `if_exists: append` to preserve existing table |
+| `replace` | Overwrite table via Spark BigQuery connector (default for full). With `if_exists: append`: delete all rows + insert (preserves schema) |
 | `upsert` | Write to temp table, then `MERGE INTO target USING temp ON ... WHEN MATCHED THEN UPDATE ... WHEN NOT MATCHED THEN INSERT ...` |
 | `merge` | Same as upsert for BigQuery |
 
@@ -95,7 +95,7 @@ Control how data is written to BigQuery:
 | `write_partitions` | int | — | Coalesce DataFrame to N partitions before writing |
 | `write_strategy` | string | — | `append`, `replace`, `upsert`, `merge` |
 | `write_key` | list | — | Key columns for upsert/merge (required) |
-| `if_exists` | string | — | `replace` (drop+create) or `append` (preserve table). Inherits from settings |
+| `if_exists` | string | — | `replace` (drop+create) or `append` (preserve table, delete+insert). Inherits from settings |
 | `dedup_columns` | list | — | Columns used for `mkpipe_id` hash deduplication |
 | `tags` | list | `[]` | Tags for selective pipeline execution |
 | `pass_on_error` | bool | `false` | Skip table on error instead of failing |
